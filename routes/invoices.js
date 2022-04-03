@@ -67,87 +67,113 @@ router.get("/:id", async function (req, res, next) {
 });
 
 
-router.post("/", async function (req, res, next) {
+router.post('/', async (req, res, next) => {
   try {
-    let {comp_code, amt} = req.body;
 
-    const result = await db.query(
-          `INSERT INTO invoices (comp_code, amt) 
-           VALUES ($1, $2) 
-           RETURNING id, comp_code, amt, paid, add_date, paid_date`,
-        [comp_code, amt]);
+      if (req.body.comp_code === undefined ||
+          req.body.amt === undefined ||
+          req.body.comp_code.length === 0) {
+          throw new ExpressError('comp_code and amt are required', 400);
+      }
 
-    return res.json({"invoice": result.rows[0]});
-  }
+      const amt = Number(req.body.amt);
 
-  catch (err) {
-    return next(err);
+      if (amt === NaN || amt <= 0) {
+          throw new ExpressError('amt must be greater than 0', 400);
+      }
+
+      const company = await db.query('SELECT code FROM companies WHERE code = $1', [req.body.comp_code]);
+
+      if (company.rows.length === 0) {
+          throw new ExpressError(`company with code ${req.body.comp_code} can not be found`, 400);
+
+      }
+
+      const results = await db.query(
+          `
+          INSERT INTO invoices 
+              (comp_code , amt) 
+          VALUES 
+              ($1 , $2)
+          RETURNING id, comp_code, amt, paid, add_date, paid_date` ,
+          [req.body.comp_code, req.body.amt]);
+
+      return res.status(201).json({ invoice: results.rows[0] });
+  } catch (err) {
+      next(err);
   }
 });
 
 
-router.put("/:id", async function (req, res, next) {
+router.put('/:id', async (req, res, next) => {
   try {
-    let {amt, paid} = req.body;
-    let id = req.params.id;
-    let paidDate = null;
 
-    const currResult = await db.query(
-          `SELECT paid
-           FROM invoices
-           WHERE id = $1`,
-        [id]);
+      if (req.body.amt === undefined){
+          throw new ExpressError('amt is required', 400);
+      }
+      const amt = Number(req.body.amt);
 
-    if (currResult.rows.length === 0) {
-      throw new ExpressError(`No such invoice: ${id}`, 404);
-    }
+      if (amt === NaN || amt <= 0) {
+          throw new ExpressError('amt must be greater than 0', 400);
+      }
 
-    const currPaidDate = currResult.rows[0].paid_date;
+      const results = await db.query(
+          `
+          UPDATE invoices 
+          SET
+              amt = $2
+          WHERE
+              id = $1
+          RETURNING id, comp_code, amt, paid, add_date, paid_date` ,
+          [req.params.id, req.body.amt]);
 
-    if (!currPaidDate && paid) {
-      paidDate = new Date();
-    } else if (!paid) {
-      paidDate = null
-    } else {
-      paidDate = currPaidDate;
-    }
+      if (results.rows.length === 0) {
+          throw new ExpressError(`invoice with id ${req.params.id} can not be found`, 404);
+      }
 
-    const result = await db.query(
-          `UPDATE invoices
-           SET amt=$1, paid=$2, paid_date=$3
-           WHERE id=$4
-           RETURNING id, comp_code, amt, paid, add_date, paid_date`,
-        [amt, paid, paidDate, id]);
 
-    return res.json({"invoice": result.rows[0]});
+      if (req.body.paid !== undefined) {
+          if (req.body.paid === true || req.body.paid === false) {
+              //only set paid to true or false would update the paid_date
+
+              const paid = req.body.paid === true ? true : false;
+              const paidDate = paid ? (new Date()).toISOString().substr(0, 10) : null;
+
+              const results = await db.query(`
+              UPDATE invoices 
+              SET
+                  paid = $2,
+                  paid_date = $3
+              WHERE
+                  id = $1
+              RETURNING id, comp_code, amt, paid, add_date, paid_date` ,
+                  [req.params.id, paid , paidDate]);
+
+              return res.json({ invoice: results.rows[0] });
+          }
+      }
+
+      return res.json({ invoice: results.rows[0] });
+  } catch (err) {
+      next(err);
   }
-
-  catch (err) {
-    return next(err);
-  }
-
 });
 
 
-router.delete("/:id", async function (req, res, next) {
+router.delete('/:id', async (req, res, next) => {
   try {
-    let id = req.params.id;
-
-    const result = await db.query(
-          `DELETE FROM invoices
-           WHERE id = $1
+      const results = await db.query(
+          `DELETE FROM invoices WHERE id = $1
            RETURNING id`,
-        [id]);
+          [req.params.id]);
 
-    if (result.rows.length === 0) {
-      throw new ExpressError(`No such invoice: ${id}`, 404);
-    }
+      if (results.rows.length === 0) {
+          throw new ExpressError(`invoice with id ${req.params.id} can not be found`, 404);
+      }
 
-    return res.json({"status": "deleted"});
-  }
-
-  catch (err) {
-    return next(err);
+      return res.json({ status: "deleted" });
+  } catch (err) {
+      next(err);
   }
 });
 

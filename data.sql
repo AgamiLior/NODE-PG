@@ -1,12 +1,30 @@
+-- DROP DATABASE IF EXISTS biztime_test;
+
+-- CREATE DATABASE biztime_test;
+
 \c biztime
 
+DROP TABLE IF EXISTS companies_industries;
 DROP TABLE IF EXISTS invoices;
 DROP TABLE IF EXISTS companies;
+DROP TABLE IF EXISTS industries;
 
 CREATE TABLE companies (
     code text PRIMARY KEY,
     name text NOT NULL UNIQUE,
     description text
+);
+
+CREATE TABLE industries (
+    code text PRIMARY KEY,
+    industry text NOT NULL UNIQUE
+);
+
+
+CREATE TABLE companies_industries (
+    comp_code text NOT NULL REFERENCES companies ON DELETE CASCADE,
+    indu_code text NOT NULL REFERENCES industries ON DELETE CASCADE,
+    PRIMARY KEY(comp_code , indu_code)
 );
 
 CREATE TABLE invoices (
@@ -22,6 +40,17 @@ CREATE TABLE invoices (
 INSERT INTO companies
   VALUES ('apple', 'Apple Computer', 'Maker of OSX.'),
          ('ibm', 'IBM', 'Big blue.');
+
+        
+INSERT INTO industries
+  VALUES ('it', 'IT'),
+         ('ws', 'Web Services'),
+         ('account' , 'Accounting');
+
+INSERT INTO companies_industries
+  VALUES ('apple' , 'it'),
+         ('ibm' , 'it') ,
+         ('ibm' , 'ws');
 
 INSERT INTO invoices (comp_Code, amt, paid, paid_date)
   VALUES ('apple', 100, false, null),
